@@ -22,8 +22,21 @@ public class Main
 
   private int maxArgsExp(Exp.T exp)
   {
-    new Todo();
-    return -1;
+    if(exp instanceof Exp.Id || 
+    		exp instanceof Exp.Num) {
+    	return 1;
+    } else if(exp instanceof Exp.Op) {
+    	int n1 = maxArgsExp(((Exp.Op)exp).left);
+    	int n2 = maxArgsExp(((Exp.Op)exp).right);
+    	return n1 > n2 ? n1 : n2;
+    }else if(exp instanceof Exp.Eseq) {
+    	int n1 = maxArgsStm(((Exp.Eseq)exp).stm);
+    	int n2 = maxArgsExp(((Exp.Eseq)exp).exp);
+    	return java.lang.Math.max(java.lang.Math.max(2,n1),n2);
+    } else {
+    	new Bug();
+    	return 0;
+    }
   }
 
   private int maxArgsStm(Stm.T stm)
@@ -35,11 +48,26 @@ public class Main
 
       return n1 >= n2 ? n1 : n2;
     } else if (stm instanceof Stm.Assign) {
-      new Todo();
-      return -1;
+      return maxArgsExp(((Stm.Assign) stm).exp);
     } else if (stm instanceof Stm.Print) {
-      new Todo();
-      return -1;
+    	int cnt = 0;
+    	int max = 0;
+    	ExpList.T p = ((Stm.Print) stm).explist;
+    	while(p instanceof ExpList.Pair) {
+    		if(maxArgsExp(((ExpList.Pair) p).exp)>max) {
+    			max = maxArgsExp(((ExpList.Pair) p).exp);
+    		}
+    		++cnt;
+    		p = ((ExpList.Pair) p).list;
+    	}
+    	if(p instanceof ExpList.Last) {
+    		if(maxArgsExp(((ExpList.Last) p).exp)>max) {
+    			max = maxArgsExp(((ExpList.Last) p).exp);
+    		}
+    		++cnt;
+    	}
+    	return max > cnt ? max : cnt;
+      
     } else
       new Bug();
     return 0;
@@ -48,19 +76,100 @@ public class Main
   // ////////////////////////////////////////
   // interpreter
 
-  private void interpExp(Exp.T exp)
+  private class Table {
+	  private String id;
+	  int value;
+	  private Table tail = null;
+	  Table(String id, int value, Table tail){
+		  this.id = id;
+		  this.value = value;
+		  this.tail = tail;
+	  }
+  }
+  private Table statement = null;
+  private int lookUp(String id)
   {
-    new Todo();
+	  Table t = statement;
+	  while(t != null) {
+		  if(t.id == id) {
+			  return t.value;
+		  }
+		  t = t.tail;
+	  }
+	  new Bug();
+	  return -1;
+  }
+  private int interpExp(Exp.T exp)
+  {
+    if(exp instanceof Exp.Id) {
+    	return lookUp(((Exp.Id)exp).id);
+    } else if(exp instanceof Exp.Num) {
+    	return ((Exp.Num)exp).num;
+    } else if (exp instanceof Exp.Op) {
+    	Exp.Op op = (Exp.Op)exp;
+    	if(op.op == Exp.OP_T.ADD) {
+    		return interpExp(op.left) + interpExp(op.right);
+    	} else if(op.op == Exp.OP_T.SUB) {
+    		return interpExp(op.left) - interpExp(op.right);
+    	} else if(op.op == Exp.OP_T.TIMES) {
+    		return interpExp(op.left) * interpExp(op.right);
+    	} else if(op.op == Exp.OP_T.DIVIDE) {
+    		if(interpExp(op.right) == 0) {
+    			System.out.println("error: divide 0!");
+    			new Bug();
+    			return -1;
+    		} else {
+    			return interpExp(op.left) / interpExp(op.right);
+    		}
+    	} else {
+    		new Bug();
+    		return -1;
+    	}
+    } else if(exp instanceof Exp.Eseq) {
+    	Exp.Eseq e = (Exp.Eseq)exp;
+    	interpStm(e.stm);
+    	return interpExp(e.exp);
+    } else {
+    	new Bug();
+    	return -1;
+    }
   }
 
   private void interpStm(Stm.T prog)
   {
     if (prog instanceof Stm.Compound) {
-      new Todo();
+      Stm.Compound s = (Stm.Compound)prog;
+      interpStm(s.s1);
+      interpStm(s.s2);
+      return;
     } else if (prog instanceof Stm.Assign) {
-      new Todo();
+      Stm.Assign s = (Stm.Assign)prog;
+      String id = s.id;
+      int expValue = interpExp(s.exp);
+      
+      if(statement != null) {
+    	  Table t = new Table(id, expValue, statement);
+    	  statement = t;
+      } else {
+    	  statement = new Table(id, expValue, null);
+      }
+      
+      return;
     } else if (prog instanceof Stm.Print) {
-      new Todo();
+      Stm.Print s = (Stm.Print) prog;
+      ExpList.T t = s.explist;
+      while(t instanceof ExpList.Pair) {
+    	  ExpList.Pair p = (ExpList.Pair)t;
+    	  System.out.print(interpExp(p.exp) + " ");
+    	  t = p.list;
+      }
+      if(t instanceof ExpList.Last) {
+    	  ExpList.Last p = (ExpList.Last)t;
+    	  System.out.print(interpExp(p.exp));
+    	  System.out.print("\n");
+      } else {
+    	  new Bug();
+      }
     } else
       new Bug();
   }
